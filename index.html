@@ -8,7 +8,7 @@
 :root{--bg:#f2f1ec;--card:#fff;--ink:#1f2a1f;--mut:#6b756b;--line:#dcdad0;--in:#2e7d4f;--out:#b8501f;--acc:#25402b;--on:#fff;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a15;--card:#1d251e;--ink:#e8ece6;--mut:#9aa69a;--line:#2f3a30;--in:#5cbf86;--out:#e8885a;--acc:#5cbf86;--on:#0f1a12}}
-:root[data-theme="dark"]{--bg:#141a15;--card:#1d251e;--ink:#e8ece6;--mut:#9aa69a;--line:#2f3a30;--in:#5cbf86;--out:#e8885a;--acc:#5cbf86;--on:#0f1a12}
+:root[data-theme="dark"]{--bg:#141a15;--card:#1d251e;--ink:#e8ece6;--mut:#9aa69a;--line:#2f3a30;--in:#5cbf86;--out:#e8885a;--acc:#5cbf86;--on:#0f1a12}}
 *{box-sizing:border-box}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
@@ -51,15 +51,13 @@ td.in{color:var(--in)}td.out{color:var(--out)}
 .filters label{margin:0 0 3px;font-size:13px}
 .empty{color:var(--mut);padding:10px 0}
 .hint{font-size:14px;font-weight:600;color:var(--in);margin-top:6px;min-height:20px}
-.notice{background:var(--card);border:1px solid var(--out);border-radius:10px;padding:14px;margin-bottom:14px}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
 </style>
 </head>
 <body>
 <main>
 <h1>Controle de insumos</h1>
-<div class="who" id="who">Conectando…</div>
-<div class="notice" id="aviso" hidden>Entre na sua conta do Claude e abra o link compartilhado para registrar e ver os lançamentos.</div>
+<div class="who" id="who">Carregando insumos...</div>
 <div class="adm" hidden><h2>Estoque disponível para retirada</h2>
 <div class="saldos" id="saldos"></div></div>
 
@@ -69,7 +67,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
   <button id="tOut" class="out" type="button">Retirada (usei)</button>
  </div>
  <label for="quem">Quem está lançando</label>
- <input id="quem" type="text" maxlength="40" autocomplete="name" placeholder="Digite seu nome">
+ <input id="quem" type="text" maxlength="40" autocomplete="name" placeholder="Digite seu nome e sobrenome">
  <label for="ins">Insumo</label>
  <select id="ins"></select>
  <div class="hint" id="disp"></div>
@@ -79,8 +77,6 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
  </div>
  <div id="plW"><label for="pla">Placa do caminhão</label><input id="pla" type="text" maxlength="8" autocapitalize="characters" placeholder="ABC1D23"></div>
  <div id="nfW"><div class="row"><div><label for="forn">Fornecedor</label><input id="forn" type="text" maxlength="60"></div><div><label for="nf">Nota fiscal</label><input id="nf" type="text" maxlength="20" inputmode="numeric"></div></div></div>
- <div id="obsW"><label for="obs" id="obsL">Local ou finalidade de uso (opcional)</label>
- <input id="obs" type="text" maxlength="80"></div>
  <button class="go" id="salvar" type="button">Registrar entrada</button>
  <div class="msg" id="msg" role="status"></div>
 </section>
@@ -107,117 +103,241 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <section class="card adm" hidden>
  <h2>Cadastrar novo insumo</h2>
  <div class="row">
-  <div><label for="nn">Nome</label><input id="nn" type="text" maxlength="30" placeholder="Ex.: Ureia"></div>
-  <div><label for="nu">Unidade</label><select id="nu"><option value="t">t (toneladas)</option><option>kg</option><option>sacos</option></select></div>
+  <div><label for="nn">Nome do Insumo</label><input id="nn" type="text" maxlength="30" placeholder="Ex.: Ureia"></div>
  </div>
- <button class="go" id="add" type="button">Adicionar insumo</button>
+ <button class="go" id="add" type="button" style="margin-top:10px">Adicionar insumo</button>
 </section>
-<div style="text-align:center;margin:8px 0 24px"><button class="ghost" id="gest" type="button" hidden>Área do gestor</button></div>
+<div style="text-align:center;margin:8px 0 24px"><button class="ghost" id="gest" type="button">Área do gestor</button></div>
 </main>
 
 <script>
 (function(){
+var API = "https://script.google.com/macros/s/AKfycbygVMGMTKv6tF4kQgXgswLZD2lvVboxi_jeE-_fK28FguT7j7bKitCY4-hlYnKaRp4R/exec"; // Substitua pela URL gerada no Apps Script (terminada em /exec)
+
 var $=function(i){return document.getElementById(i)};
 var nf=new Intl.NumberFormat("pt-BR",{maximumFractionDigits:3});
-var db=null,user=null,myId=null,admin=false,unlocked=false,staff=[],prods=[],mov=[],names={},tipo="in";
+var tipo="in", unlocked=false, codigoGestor="", dadosGestor=null, insumosLista=[];
+
 function hoje(){var d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
-function br(d){return d.split("-").reverse().join("/")}
-function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
-function nome(u){var p=names[u];return p&&p.name?(p.isMe?p.name+" (você)":p.name):(u||"Alguém")}
-function unit(n){var p=prods.filter(function(x){return x.n===n})[0];return p?p.u:""}
-function saldo(n){return mov.reduce(function(a,m){return m.p===n?a+(m.t==="in"?m.q:-m.q):a},0)}
+function br(d){if(!d)return"";var p=d.split("T")[0].split("-");return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:d}
+function esc(s){return String(s||"").replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function msg(t,c){var m=$("msg");m.textContent=t;m.className="msg "+c}
-function fill(el,html){var v=el.value;el.innerHTML=html;if(v&&Array.prototype.some.call(el.options,function(o){return o.value===v}))el.value=v}
-function filtered(){
- var i=$("fIns").value,u=$("fUser").value,a=$("fDe").value,b=$("fAte").value;
- return mov.filter(function(m){return(!i||m.p===i)&&(!u||(m.w||m.u)===u)&&(!a||m.d>=a)&&(!b||m.d<=b)}).sort(function(x,y){return x.d<y.d?1:x.d>y.d?-1:y.ts-x.ts});
+
+function setTipo(t){
+  tipo=t;
+  $("tIn").className=(t==="in"?"on ":"")+"in";
+  $("tOut").className=(t==="out"?"on ":"")+"out";
+  $("salvar").textContent=t==="in"?"Registrar entrada":"Registrar retirada";
+  $("plW").hidden=t!=="in";
+  $("nfW").hidden=t!=="in";
 }
-function showAdm(){document.querySelectorAll(".adm").forEach(function(e){e.hidden=!(admin&&unlocked)});$("gest").textContent=unlocked?"Bloquear área do gestor":"Área do gestor";$("gest").hidden=!admin}
-function renderStaff(){$("slist").innerHTML=staff.map(function(s){return'<div class="h"><div class="d">'+esc(s.n)+'</div><button type="button" data-sdel="'+esc(s.id)+'" aria-label="Remover">×</button></div>'}).join("")||'<div class="empty">Nenhum funcionário cadastrado.</div>'}
-function dispHint(){var p=$("ins").value;$("disp").textContent=p&&admin&&unlocked?"Disponível para retirada: "+nf.format(saldo(p))+" "+unit(p):""}
-function render(){
- $("saldos").innerHTML=prods.map(function(p){var s=saldo(p.n);return'<div class="s'+(s<0?" neg":"")+'"><b>'+esc(p.n)+'</b><span>'+nf.format(s)+"</span> <small>"+esc(p.u)+" disponíveis</small></div>"}).join("")||'<div class="empty">Nenhum insumo cadastrado ainda.</div>';
- var po=prods.map(function(p){return'<option value="'+esc(p.n)+'">'+esc(p.n)+" ("+esc(p.u)+")</option>"}).join("");
- fill($("ins"),po);dispHint();fill($("fIns"),'<option value="">Todos os insumos</option>'+po);
- var ids=[];mov.forEach(function(m){if(m.u&&ids.indexOf(m.u)<0)ids.push(m.w||m.u)});
- fill($("fUser"),'<option value="">Todas as pessoas</option>'+ids.map(function(u){return'<option value="'+esc(u)+'">'+esc(nome(u))+"</option>"}).join(""));
- var f=filtered(),r={},mm={};
- f.forEach(function(m){var o=r[m.p]||(r[m.p]={i:0,o:0});o[m.t==="in"?"i":"o"]+=m.q;var k=m.d.slice(0,7)+"|"+m.p,x=mm[k]||(mm[k]={i:0,o:0});x[m.t==="in"?"i":"o"]+=m.q});
- var ks=Object.keys(r);
- $("resumo").innerHTML=ks.length?"<tr><th>Insumo</th><th>Entrou</th><th>Saiu</th><th>Diferença</th></tr>"+ks.map(function(n){var o=r[n];return"<tr><td>"+esc(n)+'</td><td class="in">'+nf.format(o.i)+' '+esc(unit(n))+'</td><td class="out">'+nf.format(o.o)+' '+esc(unit(n))+"</td><td>"+nf.format(o.i-o.o)+"</td></tr>"}).join(""):'<tr><td class="empty">Sem lançamentos neste filtro.</td></tr>';
- var mk=Object.keys(mm).sort().reverse();
- $("mensal").innerHTML=mk.length?"<tr><th>Mês</th><th>Insumo</th><th>Entrou</th><th>Saiu</th></tr>"+mk.map(function(k){var p=k.split("|"),y=p[0].split("-"),o=mm[k];return"<tr><td>"+y[1]+"/"+y[0]+"</td><td>"+esc(p[1])+'</td><td class="in">'+nf.format(o.i)+'</td><td class="out">'+nf.format(o.o)+"</td></tr>"}).join(""):"";
- $("cont").textContent=f.length+" lançamento(s)";
- $("hist").innerHTML=f.length?f.map(function(m){return'<div class="h"><div class="q '+m.t+'">'+(m.t==="in"?"+ ":"− ")+nf.format(m.q)+" "+esc(unit(m.p))+'</div><div class="d"><b>'+esc(m.p)+"</b> · "+(m.t==="in"?"Entrada":"Retirada")+" em "+br(m.d)+"<i>"+(m.fo?esc(m.fo)+" · ":"")+(m.nf?"NF "+esc(m.nf)+" · ":"")+(m.pl?"Placa "+esc(m.pl)+" · ":"")+"Lançado por "+esc(m.w||nome(m.u))+(m.o?" · "+esc(m.o):"")+"</i></div>"+(admin?'<button type="button" data-del="'+esc(m.id)+'" aria-label="Apagar lançamento">×</button>':"")+"</div>"}).join(""):'<div class="empty">Nenhum lançamento neste filtro.</div>';
-}
-function setTipo(t){tipo=t;$("tIn").className=(t==="in"?"on ":"")+"in";$("tOut").className=(t==="out"?"on ":"")+"out";
- $("salvar").textContent=t==="in"?"Registrar entrada":"Registrar retirada";$("plW").hidden=t!=="in";
- $("nfW").hidden=t!=="in";$("obsW").hidden=t==="in"}
+
 $("tIn").onclick=function(){setTipo("in")};
 $("tOut").onclick=function(){setTipo("out")};
-$("ins").onchange=dispHint;
-["fIns","fUser","fDe","fAte"].forEach(function(i){$(i).onchange=render});
-$("salvar").onclick=function(){
- if(!db){msg("Sem conexão com o armazenamento compartilhado.","err");return}
- var p=$("ins").value,q=parseFloat(String($("qtd").value).replace(",",".")),d=$("dat").value;
- if(!$("quem").value.trim()){msg("Digite o nome de quem está lançando.","err");return}
- if(!p){msg("Escolha o insumo.","err");return}
- if(!(q>0)){msg("Informe uma quantidade maior que zero.","err");return}
- if(!d){msg("Informe a data.","err");return}
- if(admin&&tipo==="out"&&q>saldo(p)+1e-9){msg("Retirada maior que o estoque disponível de "+p+". Chame o gestor.","err");return}
- var obs=$("obs").value.trim(),pl=tipo==="in"?$("pla").value.trim().toUpperCase():"";
- if(tipo==="in"&&!pl){msg("Informe a placa do caminhão que entregou a carga.","err");return}
- var fo=$("forn").value.trim(),nfv=$("nf").value.trim();
- if(tipo==="in"&&!fo){msg("Informe o fornecedor.","err");return}
- if(tipo==="in"&&!nfv){msg("Informe o número da nota fiscal.","err");return}
- db.doc("mov/"+myId).set({u:myId}).then(function(){return db.collection("mov/"+myId+"/e").add({t:tipo,p:p,q:q,d:d,o:obs,w:$("quem").value.trim(),pl:pl,fo:tipo==="in"?fo:"",nf:tipo==="in"?nfv:"",u:myId,ts:Date.now()})}).then(function(){
-  $("qtd").value="";$("obs").value="";$("quem").value="";$("pla").value="";$("forn").value="";$("nf").value="";
-  msg((tipo==="in"?"Entrada":"Retirada")+" registrada: "+nf.format(q)+" "+unit(p)+" de "+p+".","ok")
- },function(e){msg("Não foi possível salvar: "+(e&&e.message?e.message:"tente novamente")+". Peça permissão de edição ao responsável.","err")})};
-$("hist").onclick=function(e){var id=e.target.getAttribute&&e.target.getAttribute("data-del");if(!id||!db)return;
- if(confirm("Apagar este lançamento?"))db.doc("mov/"+id).delete().catch(function(){msg("Não foi possível apagar.","err")})};
-$("add").onclick=function(){
- var n=$("nn").value.trim();if(!n||!db)return;
- if(prods.some(function(p){return p.n.toLowerCase()===n.toLowerCase()})){msg("Esse insumo já existe.","err");return}
- db.collection("prods").add({n:n,u:$("nu").value}).then(function(){$("nn").value="";msg(n+" adicionado.","ok")},function(){msg("Não foi possível cadastrar o insumo.","err")})};
-$("csv").onclick=function(){
- var rows=[["Data","Tipo","Insumo","Quantidade","Unidade","Lançado por","Placa","Fornecedor","Nota fiscal","Observação"]].concat(filtered().slice().reverse().map(function(m){return[br(m.d),m.t==="in"?"Entrada":"Retirada",m.p,String(m.q).replace(".",","),unit(m.p),(m.w||nome(m.u).replace(" (você)","")),m.pl||"",m.fo||"",m.nf||"",m.o]}));
- var t=rows.map(function(r){return r.join("\t")}).join("\n");
- try{navigator.clipboard.writeText(t).then(function(){msg("Planilha copiada. Cole no Excel ou Google Planilhas.","ok")},function(){msg("Não foi possível copiar neste navegador.","err")})}catch(e){msg("Não foi possível copiar neste navegador.","err")}};
-async function sha(t){var b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return Array.prototype.map.call(new Uint8Array(b),function(x){return("0"+x.toString(16)).slice(-2)}).join("")}
-var lockT=null;
-function lock(){unlocked=false;showAdm();render()}
-$("gest").onclick=async function(){
- if(unlocked){lock();return}
- try{
-  var ref=db.doc("config/pin"),snap=await ref.get(),h=snap.exists?snap.data().h:null;
-  var v=prompt(h?"Digite o PIN do gestor:":"Crie um PIN do gestor (mínimo 4 números):");
-  if(!v)return;
-  var hv=await sha(v);
-  if(!h){if(!/^\d{4,}$/.test(v)){alert("Use pelo menos 4 números.");return}await ref.set({h:hv})}
-  else if(hv!==h){alert("PIN incorreto.");return}
-  unlocked=true;showAdm();render();clearTimeout(lockT);lockT=setTimeout(lock,600000);
- }catch(e){alert("Não foi possível abrir a área do gestor.")}};
-$("quem").oninput=function(){if(this.value.trim().toLowerCase()==="controle"&&admin){this.value="";unlocked=true;showAdm();render();clearTimeout(lockT);lockT=setTimeout(lock,600000);window.scrollTo(0,0)}};
-$("dat").value=hoje();
-render();
-async function init(){
- try{db=await claude.use("db");user=await claude.use("user")}catch(e){}
- if(!db||!user){$("who").textContent="Sem acesso ao armazenamento compartilhado.";$("aviso").hidden=false;return}
- try{var me=await user.me();myId=await user.id();admin=await user.canEdit();showAdm();$("who").textContent=(admin?"":"Seu acesso é só para registrar entradas e retiradas.")}catch(e){$("who").textContent=""}
- db.collection("prods").onSnapshot(function(s){prods=s.docs.map(function(d){var x=d.data();return{id:d.id,n:x.n,u:x.u}}).sort(function(a,b){return a.n.localeCompare(b.n,"pt-BR")});render()},function(){});
- db.collection("staff").onSnapshot(function(s){staff=s.docs.map(function(d){return{id:d.id,n:d.data().n||""}}).sort(function(a,b){return a.n.localeCompare(b.n,"pt-BR")});render()},function(){});
- var legacy=[],byU={},subs={};
- function mapM(id,x){return{id:id,t:x.t,p:x.p,q:Number(x.q)||0,d:x.d||"",o:x.o||"",pl:x.pl||"",fo:x.fo||"",nf:x.nf||"",w:x.w||"",u:x.u||"",ts:x.ts||0}}
- function flat(){var r=legacy.slice();Object.keys(byU).forEach(function(k){r=r.concat(byU[k])});return r}
- async function refresh(){mov=flat();var ids=[];mov.forEach(function(m){if(m.u&&ids.indexOf(m.u)<0)ids.push(m.u)});try{if(ids.length)names=await user.profiles(ids)}catch(e){}render()}
- if(admin)db.collection("mov").onSnapshot(async function(s){
-  legacy=[];s.docs.forEach(function(d){var x=d.data();if(x.t&&x.q!==undefined){legacy.push(mapM(d.id,x))}else if(!subs[d.id]){subs[d.id]=db.collection("mov/"+d.id+"/e").onSnapshot(function(c){byU[d.id]=c.docs.map(function(e){return mapM(d.id+"/e/"+e.id,e.data())});refresh()},function(){})}});mov=flat();
-  var ids=[];mov.forEach(function(m){if(m.u&&ids.indexOf(m.u)<0)ids.push(m.u)});
-  try{if(ids.length)names=await user.profiles(ids)}catch(e){}
-  render()},function(){});
+
+function carregarInsumosPublicos(){
+  if(API.includes("COLE_AQUI")) {
+    $("who").textContent="Configure a URL da API no arquivo index.html";
+    return;
+  }
+  fetch(API + "?acao=carregarInsumos")
+    .then(res => res.json())
+    .then(data => {
+      if(data.status === "sucesso"){
+        insumosLista = data.insumos;
+        var opts = insumosLista.map(i => '<option value="'+esc(i)+'">'+esc(i)+'</option>').join("");
+        $("ins").innerHTML = opts;
+        $("fIns").innerHTML = '<option value="">Todos os insumos</option>' + opts;
+        $("who").textContent = "Pronto para novos lançamentos.";
+      }
+    })
+    .catch(err => {
+      $("who").textContent = "Erro ao carregar insumos.";
+    });
 }
-init();
+
+function atualizarTelaGestor(){
+  if(!unlocked || !dadosGestor) return;
+  
+  // Saldos
+  var estoqueHTML = "";
+  for(var insumo in dadosGestor.estoque){
+    var qtd = dadosGestor.estoque[insumo];
+    estoqueHTML += '<div class="s'+(qtd<0?" neg":"")+'"><b>'+esc(insumo)+'</b><span>'+nf.format(qtd)+'</span> <small>t disponíveis</small></div>';
+  }
+  $("saldos").innerHTML = estoqueHTML || '<div class="empty">Sem dados de estoque.</div>';
+
+  // Histórico e Filtros
+  var hist = dadosGestor.historico;
+  var fInsVal = $("fIns").value;
+  var fUserVal = $("fUser").value;
+  
+  // Usuários para filtro
+  var users = [];
+  hist.forEach(function(m){ if(m.quemLancou && users.indexOf(m.quemLancou)<0) users.push(m.quemLancou); });
+  $("fUser").innerHTML = '<option value="">Todas as pessoas</option>' + users.map(u => '<option value="'+esc(u)+'">'+esc(u)+'</option>').join("");
+
+  var filtrados = hist.filter(function(m){
+    return (!fInsVal || m.insumo === fInsVal) && (!fUserVal || m.quemLancou === fUserVal);
+  });
+
+  $("cont").textContent = filtrados.length + " lançamento(s)";
+  $("hist").innerHTML = filtrados.length ? filtrados.map(function(m){
+    var cor = m.tipo === "Entrada" ? "in" : "out";
+    var sinal = m.tipo === "Entrada" ? "+ " : "− ";
+    return '<div class="h"><div class="q '+cor+'">'+sinal+nf.format(m.quantidade)+' t</div><div class="d"><b>'+esc(m.insumo)+'</b> · '+esc(m.tipo)+' em '+br(m.dataHora)+'<i>'+(m.fornecedor&&m.fornecedor!=="-"?esc(m.fornecedor)+" · ":"")+(m.notaFiscal&&m.notaFiscal!=="-"?"NF "+esc(m.notaFiscal)+" · ":"")+(m.placa&&m.placa!=="-"?"Placa "+esc(m.placa)+" · ":"")+'Lançado por '+esc(m.quemLancou)+'</i></div><button type="button" data-del="'+m.linhaIndex+'" aria-label="Apagar lançamento">×</button></div>';
+  }).join("") : '<div class="empty">Nenhum lançamento encontrado.</div>';
+}
+
+function mostrarAdm(){
+  document.querySelectorAll(".adm").forEach(function(e){ e.hidden = !unlocked; });
+  $("gest").textContent = unlocked ? "Bloquear área do gestor" : "Área do gestor";
+}
+
+$("gest").onclick = function(){
+  if(unlocked){
+    unlocked = false;
+    codigoGestor = "";
+    dadosGestor = null;
+    mostrarAdm();
+    return;
+  }
+  var senha = prompt("Digite o código do gestor:");
+  if(!senha) return;
+
+  fetch(API + "?acao=obterDadosGestor&codigo=" + encodeURIComponent(senha))
+    .then(res => res.json())
+    .then(data => {
+      if(data.status === "sucesso"){
+        unlocked = true;
+        codigoGestor = senha;
+        dadosGestor = data;
+        mostrarAdm();
+        atualizarTelaGestor();
+      } else {
+        alert(data.mensagem || "Código incorreto.");
+      }
+    })
+    .catch(err => {
+      alert("Erro ao validar código do gestor.");
+    });
+};
+
+$("salvar").onclick = function(){
+  var quem = $("quem").value.trim();
+  var insumo = $("ins").value;
+  var quantidade = parseFloat(String($("qtd").value).replace(",", "."));
+  var data = $("dat").value;
+  var placa = $("pla").value.trim().toUpperCase();
+  var fornecedor = $("forn").value.trim();
+  var notaFiscal = $("nf").value.trim();
+
+  if(!quem){ msg("Digite o nome de quem está lançando.","err"); return; }
+  if(!insumo){ msg("Escolha o insumo.","err"); return; }
+  if(!(quantidade > 0)){ msg("Informe uma quantidade maior que zero.","err"); return; }
+  if(!data){ msg("Informe a data.","err"); return; }
+  if(tipo === "in"){
+    if(!placa){ msg("Informe a placa do caminhão.","err"); return; }
+    if(!fornecedor){ msg("Informe o fornecedor.","err"); return; }
+    if(!notaFiscal){ msg("Informe a nota fiscal.","err"); return; }
+  }
+
+  var payload = {
+    acao: "novoLancamento",
+    tipo: tipo === "in" ? "Entrada" : "Retirada",
+    quemLancou: quem,
+    insumo: insumo,
+    quantidade: quantidade,
+    placa: placa,
+    fornecedor: fornecedor,
+    notaFiscal: notaFiscal
+  };
+
+  msg("Salvando lançamento...","ok");
+
+  fetch(API, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  })
+  .then(res => res.json())
+  .then(data => {
+    if(data.status === "sucesso"){
+      msg(data.mensagem,"ok");
+      $("qtd").value = "";
+      $("pla").value = "";
+      $("forn").value = "";
+      $("nf").value = "";
+      if(unlocked) {
+        // Recarrega os dados do gestor se estiver logado
+        $("gest").click();
+        setTimeout($("gest").click, 500);
+      }
+    } else {
+      msg(data.mensagem,"err");
+    }
+  })
+  .catch(err => {
+    msg("Erro ao comunicar com o servidor.","err");
+  });
+};
+
+// Excluir lançamento (Gestor)
+$("hist").onclick = function(e){
+  var linha = e.target.getAttribute("data-del");
+  if(!linha) return;
+  if(!confirm("Deseja realmente apagar este lançamento?")) return;
+
+  fetch(API, {
+    method: "POST",
+    body: JSON.stringify({
+      acao: "apagarLancamento",
+      codigo: codigoGestor,
+      linhaIndex: Number(linha)
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if(data.status === "sucesso"){
+      alert("Lançamento excluído com sucesso!");
+      $("gest").click();
+      setTimeout($("gest").click, 500);
+    } else {
+      alert(data.mensagem);
+    }
+  });
+};
+
+// Cadastrar novo insumo
+$("add").onclick = function(){
+  var nomeInsumo = $("nn").value.trim();
+  if(!nomeInsumo) return;
+
+  fetch(API, {
+    method: "POST",
+    body: JSON.stringify({
+      acao: "cadastrarInsumo",
+      codigo: codigoGestor,
+      nomeInsumo: nomeInsumo
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if(data.status === "sucesso"){
+      alert("Insumo cadastrado com sucesso!");
+      $("nn").value = "";
+      carregarInsumosPublicos();
+      $("gest").click();
+      setTimeout($("gest").click, 500);
+    } else {
+      alert(data.mensagem);
+    }
+  });
+};
+
+["fIns","fUser"].forEach(function(i){ $(i).onchange = atualizarTelaGestor; });
+
+$("dat").value = hoje();
+carregarInsumosPublicos();
 })();
 </script>
 </body>
