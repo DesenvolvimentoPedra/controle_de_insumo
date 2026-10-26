@@ -8,7 +8,7 @@
 :root{--bg:#f2f1ec;--card:#fff;--ink:#1f2a1f;--mut:#6b756b;--line:#dcdad0;--in:#2e7d4f;--out:#b8501f;--acc:#25402b;--on:#fff;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a15;--card:#1d251e;--ink:#e8ece6;--mut:#9aa69a;--line:#2f3a30;--in:#5cbf86;--out:#e8885a;--acc:#5cbf86;--on:#0f1a12}}
-:root[data-theme="dark"]{--bg:#141a15;--card:#1d251e;--ink:#e8ece6;--mut:#9aa69a;--line:#2f3a30;--in:#5cbf86;--out:#e8885a;--acc:#5cbf86;--on:#0f1a12}}
+:root[data-theme="dark"]{--bg:#141a15;--card:#1d251e;--ink:#e8ece6;--mut:#9aa69a;--line:#2f3a30;--in:#5cbf86;--out:#e8885a;--acc:#5cbf86;--on:#0f1a12}
 *{box-sizing:border-box}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
@@ -28,8 +28,10 @@ h2{font-size:16px;margin:0 0 10px}
 .tabs button.on.in{background:var(--in);border-color:var(--in);color:var(--on)}
 .tabs button.on.out{background:var(--out);border-color:var(--out);color:var(--on)}
 label{display:block;font-size:14px;color:var(--mut);margin:10px 0 4px}
-input,select{width:100%;padding:11px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input,select{width:100%;min-width:0;padding:11px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.row>*{min-width:0}
+@media(max-width:480px){.row{grid-template-columns:1fr}}
 .go{width:100%;margin-top:14px;padding:13px;border:0;border-radius:8px;background:var(--acc);color:var(--on);font:700 16px inherit;font-family:inherit;cursor:pointer}
 .ghost{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
 .msg{margin-top:10px;font-size:14px;min-height:20px}
